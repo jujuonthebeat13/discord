@@ -1,62 +1,59 @@
-//require("dotenv").config();
+const { Client, GatewayIntentBits, SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, Events, EmbedBuilder } = require("discord.js");
 
-const {
-  Client,
-  GatewayIntentBits,
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  Events
-} = require("discord.js");
-
+// Crée le client Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers // nécessaire pour récupérer les membres
   ]
 });
 
-// 👉 IDs des rôles créatifs autorisés
+// ⚡ IDs des rôles créatifs autorisés
 const CREATIVE_ROLE_IDS = [
-  "1458140072221343846",
-  "1458284994345570538",
-  "1458140485393842207",
-  "1458140400559722558",
-  "1458285431165554910",
-  "1458285481417638020",
-  "1458285599101288559",
-  "1458285657423085764"
-
+  "1458140072221343846", // Musician
+  "1458284994345570538", // Sound Engineer
+  "1458140485393842207", // Graphic Designer
+  "1458140400559722558", // Illustrator
+  "1458285431165554910", // Animator
+  "1458285481417638020", // Game Developer
+  "1458285599101288559", // VFX
+  "1458285657423085764"  // Videographer
 ];
+
+// ⚡ ID du serveur où tu veux déployer la commande slash
+const GUILD_ID = "1458135503974170788"; 
 
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  const command = new SlashCommandBuilder()
-    .setName("find-collab")
-    .setDescription("Find members by creative role");
+  try {
+    // Récupère le serveur
+    const guild = await client.guilds.fetch(GUILD_ID);
 
-  // ⚡ Ici on utilise un serveur spécifique
-  const guildId = "1458135503974170788"; // ton server ID
-  const guild = client.guilds.cache.get(guildId);
-  if (guild) {
+    // Crée la commande slash pour ce serveur
+    const command = new SlashCommandBuilder()
+      .setName("find-collab")
+      .setDescription("Find members by creative role");
+
     await guild.commands.create(command);
     console.log("✅ Command registered for guild");
-  } else {
-    console.log("❌ Guild not found");
+  } catch (err) {
+    console.error("❌ Error registering command:", err);
   }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+// ⚡ Interaction handler
+client.on(Events.InteractionCreate, async (interaction) => {
   // Slash command
   if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
     const roles = CREATIVE_ROLE_IDS
-      .map(id => interaction.guild.roles.cache.get(id))
+      .map((id) => interaction.guild.roles.cache.get(id))
       .filter(Boolean)
-      .map(role => ({
-        label: role.name,
-        value: role.id
-      }));
+      .map((role) => ({ label: role.name, value: role.id }));
+
+    if (roles.length === 0) {
+      return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
+    }
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("select-role")
@@ -77,28 +74,28 @@ client.on(Events.InteractionCreate, async interaction => {
     const roleId = interaction.values[0];
     const role = interaction.guild.roles.cache.get(roleId);
 
-    if (!role)
-      return interaction.update({ content: "❌ Role not found", components: [] });
+    if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
 
-    // ⚡ Fetch tous les membres du serveur pour remplir role.members
+    // Fetch tous les membres du serveur pour que role.members soit à jour
     await interaction.guild.members.fetch();
 
-    // Maintenant role.members contient tous les membres du rôle
     const members = role.members
-      .map(m => m.user.username)
+      .map((m) => m.user.username)
       .sort((a, b) => a.localeCompare(b));
 
-    const output =
-      members.length > 0
-        ? members.slice(0, 15).map(n => `• ${n}`).join("\n")
-        : "_No members found._";
+    const output = members.length > 0
+      ? members.slice(0, 15).map((n) => `• ${n}`).join("\n")
+      : "_No members found_";
 
-    await interaction.update({
-      content: `**${role.name} — Available members:**\n${output}`,
-      components: []
-    });
+    const embed = new EmbedBuilder()
+      .setTitle(`${role.name} — Available members`)
+      .setDescription(output)
+      .setColor(0x1abc9c)
+      .setFooter({ text: "Le Studio Bot" });
+
+    await interaction.update({ embeds: [embed], components: [] });
   }
 });
 
-
+// ⚡ Connecte le bot à Discord via la variable d'environnement Railway
 client.login(process.env.DISCORD_TOKEN);
