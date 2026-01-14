@@ -13,11 +13,11 @@ const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
   "1458284994345570538", // Sound Engineer
   "1458140485393842207", // Graphic Designer
-  "1458140400559722558", // Illustrator
-  "1458285431165554910", // Animator
-  "1458285481417638020", // Game Developer
-  "1458285599101288559", // VFX
-  "1458285657423085764"  // Videographer
+  "1458140400559722558", // Game Dev
+  "1458285431165554910", // VFX
+  "1458285481417638020", // Animation
+  "1458285599101288559", // Video
+  "1458285657423085764"  // Photo
 ];
 
 // ⚡ ID du serveur où tu veux déployer la commande slash
@@ -99,3 +99,4 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 // ⚡ Connecte le bot à Discord via la variable d'environnement Railway
 client.login(process.env.DISCORD_TOKEN);
+
