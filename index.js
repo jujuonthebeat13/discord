@@ -91,7 +91,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .setTitle(`${role.name} — Available members`)
       .setDescription(output)
       .setColor(0x1abc9c)
-      .setFooter({ text: "Le Studio Bot" });
+      
 
     await interaction.update({ embeds: [embed], components: [] });
   }
@@ -99,4 +99,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 // ⚡ Connecte le bot à Discord via la variable d'environnement Railway
 client.login(process.env.DISCORD_TOKEN);
+
 
