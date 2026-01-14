@@ -70,34 +70,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   // Select menu
-  if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
-    const roleId = interaction.values[0];
-    const role = interaction.guild.roles.cache.get(roleId);
+if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
+  const roleId = interaction.values[0];
+  const role = interaction.guild.roles.cache.get(roleId);
 
-    if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
+  if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
 
-    // Fetch tous les membres du serveur pour que role.members soit à jour
-    await interaction.guild.members.fetch();
+  // Fetch tous les membres du serveur pour que role.members soit à jour
+  await interaction.guild.members.fetch();
 
-    const members = role.members
-      .map((m) => m.user.username)
-      .sort((a, b) => a.localeCompare(b));
+  const members = role.members
+    .map((m) => `<@${m.user.id}>`) // 🔹 ici on utilise la mention directe
+    .sort((a, b) => a.localeCompare(b));
 
-    const output = members.length > 0
-      ? members.slice(0, 15).map((n) => `• ${n}`).join("\n")
-      : "_No members found_";
+  const output = members.length > 0
+    ? members.slice(0, 15).join("\n") // pas besoin du bullet "•" ici, la mention suffit
+    : "_No members found_";
 
-    const embed = new EmbedBuilder()
-      .setTitle(`${role.name} — Available members`)
-      .setDescription(output)
-      .setColor(0x1abc9c)
-      
+  const embed = new EmbedBuilder()
+    .setTitle(`${role.name} — Available members`)
+    .setDescription(output)
+    .setColor(0x1abc9c);
 
-    await interaction.update({ embeds: [embed], components: [] });
-  }
-});
+  await interaction.update({ embeds: [embed], components: [] });
+}
 
 // ⚡ Connecte le bot à Discord via la variable d'environnement Railway
 client.login(process.env.DISCORD_TOKEN);
+
 
 
