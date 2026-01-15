@@ -6,7 +6,7 @@ const {
   StringSelectMenuBuilder, 
   ModalBuilder, 
   TextInputBuilder, 
-  TextInputStyle, 
+  TextInputStyle,
   Events, 
   EmbedBuilder 
 } = require("discord.js");
@@ -18,14 +18,14 @@ const client = new Client({
   ]
 });
 
-// ================ CONFIG ================
-const GUILD_ID = "1458135503974170788"; // <--- Your server ID
-const EXISTING_THREAD_ID = "1461146580148158589"; // <--- Existing thread ID
+// ================= CONFIG =================
+const GUILD_ID = "1458135503974170788"; // Your server ID
+const MUSIC_THREAD_ID = "1461146580148158589"; // The ID of the existing thread in the forum
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
-  "1458284994345570538", // Sound Engineer
-  "1458140485393842207", // Graphic Designer
+  "1458284994345570538", // Sound
+  "1458140485393842207", // Design
   "1458140400559722558", // Game Dev
   "1458285431165554910", // VFX
   "1458285481417638020", // Animation
@@ -33,16 +33,7 @@ const CREATIVE_ROLE_IDS = [
   "1458285657423085764"  // Photo
 ];
 
-const COLOR_OPTIONS = [
-  { label: "Teal", value: "1abc9c" },
-  { label: "Blue", value: "3498db" },
-  { label: "Purple", value: "9b59b6" },
-  { label: "Red", value: "e74c3c" },
-  { label: "Orange", value: "e67e22" },
-  { label: "Yellow", value: "f1c40f" }
-];
-
-// ================ READY ================
+// ================= READY =================
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
@@ -60,7 +51,7 @@ client.once("ready", async () => {
   console.log("✅ Slash commands registered");
 });
 
-// ================ INTERACTIONS ================
+// ================= INTERACTIONS =================
 client.on(Events.InteractionCreate, async interaction => {
 
   // ---------- /find-collab ----------
@@ -103,19 +94,18 @@ client.on(Events.InteractionCreate, async interaction => {
       .setCustomId("event-modal")
       .setTitle("Create Music Event");
 
-    // Text inputs
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("name")
-          .setLabel("Event Name")
+          .setLabel("Event name")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("description")
-          .setLabel("Description")
+          .setLabel("Event description")
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
       ),
@@ -129,7 +119,7 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("time")
-          .setLabel("Time (HH:MM 24h)")
+          .setLabel("Time (24h, e.g., 20:00)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
@@ -143,30 +133,30 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("ticket")
-          .setLabel("Ticket Link")
+          .setLabel("Ticket link")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("external")
-          .setLabel("External Link")
-          .setStyle(TextInputStyle.Short)
+          .setCustomId("additional")
+          .setLabel("External links / more info")
+          .setStyle(TextInputStyle.Paragraph)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("image")
-          .setLabel("Direct Image URL (Poster)")
+          .setLabel("Poster image URL (direct link)")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
-      // Color selection
       new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId("color-select")
-          .setPlaceholder("Choose embed color")
-          .addOptions(COLOR_OPTIONS.map(c => ({ label: c.label, value: c.value })))
+        new TextInputBuilder()
+          .setCustomId("color")
+          .setLabel("Embed color (hex, optional, e.g., #D10C0C)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
       )
     );
 
@@ -181,12 +171,13 @@ client.on(Events.InteractionCreate, async interaction => {
     const time = interaction.fields.getTextInputValue("time");
     const location = interaction.fields.getTextInputValue("location");
     const ticket = interaction.fields.getTextInputValue("ticket");
-    const external = interaction.fields.getTextInputValue("external");
+    const additional = interaction.fields.getTextInputValue("additional");
     const image = interaction.fields.getTextInputValue("image");
-    const colorValue = interaction.fields.getTextInputValue("color-select");
+    const colorInput = interaction.fields.getTextInputValue("color");
 
-    const color = colorValue ? parseInt(colorValue, 16) : 0x1abc9c;
+    const color = colorInput ? parseInt(colorInput.replace("#",""),16) : 0xD10C0C;
 
+    // Build embed
     const embed = new EmbedBuilder()
       .setTitle(name)
       .setDescription(description)
@@ -196,22 +187,23 @@ client.on(Events.InteractionCreate, async interaction => {
         { name: "**⏰ Time**", value: time, inline: true },
         { name: "**📍 Location**", value: location || "TBA", inline: true },
         { name: "**🎟 Ticket**", value: ticket ? `[Get tickets here](${ticket})` : "—", inline: true },
-        { name: "**🔗 More info**", value: external ? `[For more information](${external})` : "—", inline: false }
+        { name: "**🔗 External links**", value: additional ? `[For more information](${additional})` : "—", inline: false }
       )
       .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
     if (image) embed.setImage(image);
 
     // Post in existing thread
-    const thread = await interaction.guild.channels.fetch(EXISTING_THREAD_ID);
+    const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
     if (!thread || !thread.isThread()) {
-      return interaction.reply({ content: "❌ Existing thread not found", ephemeral: true });
+      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
     }
 
     await thread.send({ embeds: [embed] });
     await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
+
 });
 
-// ================ LOGIN ================
+// ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
