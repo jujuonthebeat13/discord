@@ -19,8 +19,8 @@ const client = new Client({
 });
 
 // ================= CONFIG =================
-const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // Existing thread
+const GUILD_ID = "1458135503974170788"; // <-- Your server ID
+const MUSIC_THREAD_ID = "1461146580148158589"; // <-- ID of the existing thread in the forum
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -37,18 +37,20 @@ const CREATIVE_ROLE_IDS = [
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  const guild = await client.guilds.fetch(GUILD_ID);
-
-  await guild.commands.set([
-    new SlashCommandBuilder()
-      .setName("find-collab")
-      .setDescription("Find members by creative role"),
-    new SlashCommandBuilder()
-      .setName("create-event")
-      .setDescription("Create a music event post")
-  ]);
-
-  console.log("✅ Slash commands registered");
+  try {
+    const guild = await client.guilds.fetch(GUILD_ID);
+    await guild.commands.set([
+      new SlashCommandBuilder()
+        .setName("find-collab")
+        .setDescription("Find members by creative role"),
+      new SlashCommandBuilder()
+        .setName("create-event")
+        .setDescription("Create a music event post")
+    ]);
+    console.log("✅ Slash commands registered");
+  } catch (err) {
+    console.error("❌ Error registering commands:", err);
+  }
 });
 
 // ================= INTERACTIONS =================
@@ -100,7 +102,7 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("name")
-          .setLabel("Event Name")
+          .setLabel("Event name")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
@@ -114,17 +116,15 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("date")
-          .setLabel("Date")
+          .setLabel("Date (e.g., March 22)")
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("March 22")
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("time")
-          .setLabel("Time")
+          .setLabel("Time (e.g., 8:00 PM)")
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("8:00 PM")
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
@@ -137,7 +137,7 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("color")
-          .setLabel("Embed Color Hex (optional, e.g., #1abc9c)")
+          .setLabel("Embed color hex (optional, e.g., #1abc9c)")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
@@ -151,14 +151,14 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("ticket")
-          .setLabel("Ticket Link")
+          .setLabel("Ticket link")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("additional")
-          .setLabel("Additional Links")
+          .setLabel("Additional links")
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(false)
       )
@@ -190,18 +190,19 @@ client.on(Events.InteractionCreate, async interaction => {
         { name: "⏰ Time", value: time, inline: true },
         { name: "📍 Location", value: location || "TBA", inline: true },
         { name: "🎟 Ticket", value: ticket || "—", inline: true },
-        { name: "🔗 Additional Links", value: additional || "—", inline: false }
+        { name: "🔗 Additional links", value: additional || "—" }
       )
       .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
     if (image) embed.setImage(image);
 
+    // Post in existing thread (unarchive if needed)
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
-    if (!thread || !thread.isThread()) {
-      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
-    }
+    if (!thread) return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
 
+    if (thread.archived) await thread.setArchived(false);
     await thread.send({ embeds: [embed] });
+
     await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
 });
