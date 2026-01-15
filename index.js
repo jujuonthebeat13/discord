@@ -20,7 +20,7 @@ const client = new Client({
 
 // ================= CONFIG =================
 const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // ID of the existing thread
+const MUSIC_THREAD_ID = "1461146580148158589"; // Existing thread
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -61,9 +61,7 @@ client.on(Events.InteractionCreate, async interaction => {
       .filter(Boolean)
       .map(role => ({ label: role.name, value: role.id }));
 
-    if (!roles.length) {
-      return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
-    }
+    if (!roles.length) return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("select-role")
@@ -198,7 +196,6 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (image) embed.setImage(image);
 
-    // Post in existing thread
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
     if (!thread || !thread.isThread()) {
       return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
@@ -207,12 +204,7 @@ client.on(Events.InteractionCreate, async interaction => {
     await thread.send({ embeds: [embed] });
     await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
-
 });
 
 // ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
-
-
-
-
