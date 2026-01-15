@@ -1,26 +1,33 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  SlashCommandBuilder, 
-  ActionRowBuilder, 
-  StringSelectMenuBuilder, 
-  Events, 
-  EmbedBuilder 
+const {
+  Client,
+  GatewayIntentBits,
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  Events,
+  EmbedBuilder,
+  ChannelType
 } = require("discord.js");
 
-// Crée le client Discord
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers // nécessaire pour récupérer les membres
+    GatewayIntentBits.GuildMembers
   ]
 });
 
-// ⚡ IDs des rôles créatifs autorisés
+// ================= CONFIG =================
+
+const GUILD_ID = "1458135503974170788"; // TON SERVEUR
+const MUSIC_FORUM_ID = "1461146580148158589"; // FORUM MUSOC EVENT
+
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
-  "1458284994345570538", // Sound Engineer
-  "1458140485393842207", // Graphic Designer
+  "1458284994345570538", // Sound
+  "1458140485393842207", // Design
   "1458140400559722558", // Game Dev
   "1458285431165554910", // VFX
   "1458285481417638020", // Animation
@@ -28,88 +35,185 @@ const CREATIVE_ROLE_IDS = [
   "1458285657423085764"  // Photo
 ];
 
-// ⚡ ID du serveur où tu veux déployer la commande slash
-const GUILD_ID = "1458135503974170788"; 
+// ================= READY =================
 
-// ⚡ Ready
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  try {
-    // Récupère le serveur
-    const guild = await client.guilds.fetch(GUILD_ID);
+  const guild = await client.guilds.fetch(GUILD_ID);
 
-    // Crée la commande slash pour ce serveur
-    const command = new SlashCommandBuilder()
+  await guild.commands.set([
+    new SlashCommandBuilder()
       .setName("find-collab")
-      .setDescription("Find members by creative role");
+      .setDescription("Find members by creative role")
+      .toJSON(),
 
-    await guild.commands.create(command);
-    console.log("✅ Command registered for guild");
-  } catch (err) {
-    console.error("❌ Error registering command:", err);
-  }
+    new SlashCommandBuilder()
+      .setName("create-event")
+      .setDescription("Create a music event post")
+      .toJSON()
+  ]);
+
+  console.log("✅ Slash commands registered");
 });
 
-// ⚡ Interaction handler
-client.on(Events.InteractionCreate, async (interaction) => {
+// ================= INTERACTIONS =================
 
-  // === Slash command ===
+client.on(Events.InteractionCreate, async interaction => {
+
+  if (!interaction.guild) return;
+
+  // ---------- /find-collab ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
     const roles = CREATIVE_ROLE_IDS
-      .map((id) => interaction.guild.roles.cache.get(id))
+      .map(id => interaction.guild.roles.cache.get(id))
       .filter(Boolean)
-      .map((role) => ({ label: role.name, value: role.id }));
-
-    if (roles.length === 0) {
-      return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
-    }
+      .map(role => ({ label: role.name, value: role.id }));
 
     const menu = new StringSelectMenuBuilder()
       .setCustomId("select-role")
       .setPlaceholder("Select a creative role")
       .addOptions(roles);
 
-    const row = new ActionRowBuilder().addComponents(menu);
-
     await interaction.reply({
       content: "Select a role to see available members:",
-      components: [row],
+      components: [new ActionRowBuilder().addComponents(menu)],
       ephemeral: true
     });
   }
 
-  // === Select menu ===
+  // ---------- ROLE SELECT ----------
   if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
-    const roleId = interaction.values[0];
-    const role = interaction.guild.roles.cache.get(roleId);
-
-    if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
-
-    // Fetch tous les membres pour que role.members soit à jour
     await interaction.guild.members.fetch();
 
-    const members = role.members
-      .map((m) => `<@${m.user.id}>`) // 🔹 Mention clickable
-      .sort((a, b) => a.localeCompare(b));
+    const role = interaction.guild.roles.cache.get(interaction.values[0]);
+    if (!role) {
+      return interaction.update({ content: "❌ Role not found", components: [] });
+    }
 
-    const output = members.length > 0
-      ? members.slice(0, 15).join("\n")
-      : "_No members found_";
+    const members = role.members.map(m => `<@${m.user.id}>`);
 
     const embed = new EmbedBuilder()
       .setTitle(`${role.name} — Available members`)
-      .setDescription(output)
-      .setColor(0x1abc9c)
-      ;
+      .setDescription(
+        members.length ? members.slice(0, 20).join("\n") : "_No members found_"
+      )
+      .setColor(0x1abc9c);
 
     await interaction.update({ embeds: [embed], components: [] });
   }
+
+  // ---------- /create-event ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
+
+    const modal = new ModalBuilder()
+      .setCustomId("event-modal")
+      .setTitle("Create Music Event");
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("name")
+          .setLabel("Event name")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("description")
+          .setLabel("Description")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("date")
+          .setLabel("Date & time")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("March 22 • 8PM")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("location")
+          .setLabel("Location")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("links")
+          .setLabel("Links / Poster / Color")
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder(
+            "https://poster.png\nhttps://instagram.com/...\n#ff0055"
+          )
+          .setRequired(false)
+      )
+    );
+
+    await interaction.showModal(modal);
+  }
+
+  // ---------- MODAL SUBMIT ----------
+  if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
+
+    const name = interaction.fields.getTextInputValue("name");
+    const description = interaction.fields.getTextInputValue("description");
+    const date = interaction.fields.getTextInputValue("date");
+    const location = interaction.fields.getTextInputValue("location") || "TBA";
+    const rawLinks = interaction.fields.getTextInputValue("links") || "";
+
+    const lines = rawLinks.split("\n").map(l => l.trim()).filter(Boolean);
+
+    const colorLine = lines.find(l => l.startsWith("#"));
+    const color = colorLine ? parseInt(colorLine.slice(1), 16) : 0x1abc9c;
+
+    const imageLink = lines.find(l =>
+      l.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+    );
+
+    const links = lines.filter(l => l.startsWith("http") && l !== imageLink);
+
+    const embed = new EmbedBuilder()
+      .setTitle(name)
+      .setDescription(description)
+      .setColor(color)
+      .addFields(
+        { name: "📅 Date & Time", value: date, inline: true },
+        { name: "📍 Location", value: location, inline: true },
+        {
+          name: "🔗 Links",
+          value: links.length ? links.join("\n") : "—"
+        }
+      )
+      .setFooter({
+        text: `Post made by ${interaction.user.tag}`,
+        iconURL: interaction.user.displayAvatarURL()
+      });
+
+    if (imageLink) embed.setImage(imageLink);
+
+    const forum = await interaction.guild.channels.fetch(MUSIC_FORUM_ID);
+
+    if (!forum || forum.type !== ChannelType.GuildForum) {
+      return interaction.reply({
+        content: "❌ Music forum not found.",
+        ephemeral: true
+      });
+    }
+
+    await forum.threads.create({
+      name: name,
+      message: { embeds: [embed] }
+    });
+
+    await interaction.reply({
+      content: "✅ Event successfully posted!",
+      ephemeral: true
+    });
+  }
 });
 
-// ⚡ Connecte le bot à Discord via la variable d'environnement Railway
+// ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
-
-
-
-
