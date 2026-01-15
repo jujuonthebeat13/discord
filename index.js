@@ -12,15 +12,12 @@ const {
 } = require("discord.js");
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 // ================= CONFIG =================
-const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // Existing thread in the forum
+const GUILD_ID = "1458135503974170788"; // Ton serveur
+const MUSIC_THREAD_ID = "1461146580148158589"; // Fil/forum existant
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -33,10 +30,17 @@ const CREATIVE_ROLE_IDS = [
   "1458285657423085764"  // Photo
 ];
 
+const COLOR_OPTIONS = [
+  { label: "Red", value: "D10C0C", color: 0xD10C0C },
+  { label: "Blue", value: "3498DB", color: 0x3498DB },
+  { label: "Green", value: "2ECC71", color: 0x2ECC71 },
+  { label: "Purple", value: "9B59B6", color: 0x9B59B6 },
+  { label: "Orange", value: "E67E22", color: 0xE67E22 }
+];
+
 // ================= READY =================
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
-
   const guild = await client.guilds.fetch(GUILD_ID);
 
   await guild.commands.set([
@@ -88,13 +92,13 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.update({ embeds: [embed], components: [] });
   }
 
-  // ---------- /create-event STEP 1 ----------
+  // ---------- /create-event ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
-    const modal = new ModalBuilder()
+    const modal1 = new ModalBuilder()
       .setCustomId("event-step1")
       .setTitle("Create Music Event - Step 1");
 
-    modal.addComponents(
+    modal1.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("name")
@@ -119,37 +123,29 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("time")
-          .setLabel("Time (24h)")
+          .setLabel("Time (24h format)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("location")
-          .setLabel("Location")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
       )
     );
 
-    await interaction.showModal(modal);
+    await interaction.showModal(modal1);
   }
 
-  // ---------- MODAL SUBMIT STEP 1 ----------
+  // ---------- STEP 1 SUBMIT ----------
   if (interaction.isModalSubmit() && interaction.customId === "event-step1") {
     const step1Data = {
       name: interaction.fields.getTextInputValue("name"),
       description: interaction.fields.getTextInputValue("description"),
       date: interaction.fields.getTextInputValue("date"),
-      time: interaction.fields.getTextInputValue("time"),
-      location: interaction.fields.getTextInputValue("location")
+      time: interaction.fields.getTextInputValue("time")
     };
 
-    // Store in user temporary cache (or you can use a Map)
-    client.tempEventData = client.tempEventData || {};
-    client.tempEventData[interaction.user.id] = step1Data;
+    // Stocker temporairement les données de step1 dans l'interaction (ou base simple)
+    interaction.client.tempEventData = interaction.client.tempEventData || {};
+    interaction.client.tempEventData[interaction.user.id] = step1Data;
 
-    // Show STEP 2 modal
+    // Step 2 modal
     const modal2 = new ModalBuilder()
       .setCustomId("event-step2")
       .setTitle("Create Music Event - Step 2");
@@ -157,29 +153,36 @@ client.on(Events.InteractionCreate, async interaction => {
     modal2.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("ticket")
-          .setLabel("Ticket Link")
+          .setCustomId("location")
+          .setLabel("Location")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("external")
-          .setLabel("External Link")
+          .setCustomId("ticket")
+          .setLabel("Ticket link (optional)")
           .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("additional")
+          .setLabel("Additional links (optional)")
+          .setStyle(TextInputStyle.Paragraph)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("image")
-          .setLabel("Image URL (Direct link)")
+          .setLabel("Image URL (direct link)")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("color")
-          .setLabel("Color (Red/Blue/Green/Purple/Orange)")
+          .setLabel("Color (Red, Blue, Green, Purple, Orange) or leave blank")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       )
@@ -188,59 +191,59 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.showModal(modal2);
   }
 
-  // ---------- MODAL SUBMIT STEP 2 ----------
+  // ---------- STEP 2 SUBMIT ----------
   if (interaction.isModalSubmit() && interaction.customId === "event-step2") {
-    const step2Data = {
-      ticket: interaction.fields.getTextInputValue("ticket"),
-      external: interaction.fields.getTextInputValue("external"),
-      image: interaction.fields.getTextInputValue("image"),
-      color: interaction.fields.getTextInputValue("color")
-    };
+    const step1Data = interaction.client.tempEventData?.[interaction.user.id];
+    if (!step1Data) {
+      return interaction.reply({ content: "❌ Step 1 data not found. Please retry.", ephemeral: true });
+    }
 
-    // Retrieve step 1
-    const step1Data = client.tempEventData?.[interaction.user.id];
-    if (!step1Data) return interaction.reply({ content: "❌ Step 1 data not found.", ephemeral: true });
+    const location = interaction.fields.getTextInputValue("location") || "TBA";
+    const ticket = interaction.fields.getTextInputValue("ticket");
+    const additional = interaction.fields.getTextInputValue("additional");
+    const image = interaction.fields.getTextInputValue("image");
+    const colorInput = interaction.fields.getTextInputValue("color");
 
-    // Determine color
-    let colorMap = {
-      red: 0xD10C0C,
-      blue: 0x3498db,
-      green: 0x2ecc71,
-      purple: 0x9b59b6,
-      orange: 0xe67e22
-    };
-    let color = colorMap[(step2Data.color || "").toLowerCase()] || 0xD10C0C;
+    // Couleur par défaut si vide
+    let color = 0xD10C0C;
+    if (colorInput) {
+      const match = COLOR_OPTIONS.find(c => c.label.toLowerCase() === colorInput.trim().toLowerCase());
+      if (match) color = match.color;
+    }
 
-    // Format date (simple dd/mm/yyyy → 12 December 2026)
-    let [dd, mm, yyyy] = step1Data.date.split("/");
-    let monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    let formattedDate = dd && mm && yyyy ? `${parseInt(dd)} ${monthNames[parseInt(mm)-1]} ${yyyy}` : step1Data.date;
+    // Formater date en texte
+    let formattedDate = step1Data.date;
+    try {
+      const [dd, mm, yyyy] = step1Data.date.split("/");
+      const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      formattedDate = `${parseInt(dd)} ${monthNames[parseInt(mm)-1]} ${yyyy}`;
+    } catch {}
 
-    // Build embed
     const embed = new EmbedBuilder()
       .setTitle(step1Data.name)
       .setDescription(step1Data.description)
       .setColor(color)
       .addFields(
-        { name: "**Date**", value: formattedDate, inline: true },
-        { name: "**Time**", value: step1Data.time, inline: true },
-        { name: "**Location**", value: step1Data.location || "TBA", inline: true },
-        { name: "**Ticket**", value: step2Data.ticket ? `[Get tickets here](${step2Data.ticket})` : "—", inline: true },
-        { name: "**Links**", value: step2Data.external ? `[For more information](${step2Data.external})` : "—", inline: false }
+        { name: "📅 Date", value: formattedDate, inline: true },
+        { name: "⏰ Time", value: step1Data.time, inline: true },
+        { name: "📍 Location", value: location, inline: true },
+        { name: "🎟 Ticket", value: ticket ? `[Get tickets here](${ticket})` : "—", inline: true },
+        { name: "🔗 Additional links", value: additional ? `[For more info](${additional})` : "—", inline: false }
       )
       .setFooter({ text: `Posted by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
-    if (step2Data.image) embed.setImage(step2Data.image);
+    if (image) embed.setImage(image);
 
-    // Post in existing thread
+    // Envoyer dans le thread existant
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
-    if (!thread || !thread.isThread()) return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
+    if (!thread || !thread.isThread()) {
+      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
+    }
 
     await thread.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
+    delete interaction.client.tempEventData[interaction.user.id];
 
-    // Cleanup temp data
-    delete client.tempEventData[interaction.user.id];
+    await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
 });
 
