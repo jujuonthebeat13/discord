@@ -18,11 +18,10 @@ const client = new Client({
   ]
 });
 
-// ================= CONFIG =================
-const GUILD_ID = "1458135503974170788"; // <--- Met ton serveur ID
-const EXISTING_THREAD_ID = "1461146580148158589"; // <--- Met l'ID du thread déjà existant
+// ================ CONFIG ================
+const GUILD_ID = "1458135503974170788"; // <--- Your server ID
+const EXISTING_THREAD_ID = "1461146580148158589"; // <--- Existing thread ID
 
-// Rôles créatifs
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
   "1458284994345570538", // Sound Engineer
@@ -34,15 +33,16 @@ const CREATIVE_ROLE_IDS = [
   "1458285657423085764"  // Photo
 ];
 
-// Couleurs simples
 const COLOR_OPTIONS = [
-  { label: "Teal", value: "1abc9c", color: 0x1abc9c },
-  { label: "Blue", value: "3498db", color: 0x3498db },
-  { label: "Purple", value: "9b59b6", color: 0x9b59b6 },
-  { label: "Red", value: "e74c3c", color: 0xe74c3c }
+  { label: "Teal", value: "1abc9c" },
+  { label: "Blue", value: "3498db" },
+  { label: "Purple", value: "9b59b6" },
+  { label: "Red", value: "e74c3c" },
+  { label: "Orange", value: "e67e22" },
+  { label: "Yellow", value: "f1c40f" }
 ];
 
-// ================= READY =================
+// ================ READY ================
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
@@ -60,7 +60,7 @@ client.once("ready", async () => {
   console.log("✅ Slash commands registered");
 });
 
-// ================= INTERACTIONS =================
+// ================ INTERACTIONS ================
 client.on(Events.InteractionCreate, async interaction => {
 
   // ---------- /find-collab ----------
@@ -103,6 +103,7 @@ client.on(Events.InteractionCreate, async interaction => {
       .setCustomId("event-modal")
       .setTitle("Create Music Event");
 
+    // Text inputs
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -121,14 +122,14 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("date")
-          .setLabel("Date (e.g., March 22)")
+          .setLabel("Date (dd/mm/yyyy)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("time")
-          .setLabel("Time (e.g., 8:00 PM)")
+          .setLabel("Time (HH:MM 24h)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
@@ -160,12 +161,12 @@ client.on(Events.InteractionCreate, async interaction => {
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
+      // Color selection
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("color")
-          .setLabel("Embed Color Hex (optional, e.g., #1abc9c)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
+        new StringSelectMenuBuilder()
+          .setCustomId("color-select")
+          .setPlaceholder("Choose embed color")
+          .addOptions(COLOR_OPTIONS.map(c => ({ label: c.label, value: c.value })))
       )
     );
 
@@ -182,9 +183,9 @@ client.on(Events.InteractionCreate, async interaction => {
     const ticket = interaction.fields.getTextInputValue("ticket");
     const external = interaction.fields.getTextInputValue("external");
     const image = interaction.fields.getTextInputValue("image");
-    const colorHex = interaction.fields.getTextInputValue("color");
+    const colorValue = interaction.fields.getTextInputValue("color-select");
 
-    const color = colorHex ? parseInt(colorHex.replace("#",""), 16) : 0x1abc9c;
+    const color = colorValue ? parseInt(colorValue, 16) : 0x1abc9c;
 
     const embed = new EmbedBuilder()
       .setTitle(name)
@@ -201,7 +202,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (image) embed.setImage(image);
 
-    // Envoie dans le thread existant
+    // Post in existing thread
     const thread = await interaction.guild.channels.fetch(EXISTING_THREAD_ID);
     if (!thread || !thread.isThread()) {
       return interaction.reply({ content: "❌ Existing thread not found", ephemeral: true });
@@ -212,5 +213,5 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
-// ================= LOGIN =================
+// ================ LOGIN ================
 client.login(process.env.DISCORD_TOKEN);
