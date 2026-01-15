@@ -1,29 +1,23 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  SlashCommandBuilder, 
-  ActionRowBuilder, 
-  StringSelectMenuBuilder, 
-  ModalBuilder, 
-  TextInputBuilder, 
-  TextInputStyle, 
-  SelectMenuBuilder,
-  Events, 
-  EmbedBuilder 
+const {
+  Client,
+  GatewayIntentBits,
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  Events,
+  EmbedBuilder
 } = require("discord.js");
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 // ================= CONFIG =================
-const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // Existing thread ID in forum
+const GUILD_ID = "1458135503974170788"; // Ton serveur
+const MUSIC_THREAD_ID = "1461146580148158589"; // Thread existant pour poster
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -37,12 +31,11 @@ const CREATIVE_ROLE_IDS = [
 ];
 
 const COLOR_OPTIONS = [
-  { label: "Red", value: "D10C0C" },
-  { label: "Teal", value: "1ABC9C" },
-  { label: "Blue", value: "3498DB" },
-  { label: "Purple", value: "9B59B6" },
-  { label: "Orange", value: "E67E22" },
-  { label: "Yellow", value: "F1C40F" }
+  { label: "Red", value: "D10C0C", color: 0xD10C0C },
+  { label: "Blue", value: "3498DB", color: 0x3498DB },
+  { label: "Green", value: "2ECC71", color: 0x2ECC71 },
+  { label: "Purple", value: "9B59B6", color: 0x9B59B6 },
+  { label: "Orange", value: "E67E22", color: 0xE67E22 }
 ];
 
 // ================= READY =================
@@ -64,7 +57,7 @@ client.once("ready", async () => {
 });
 
 // ================= INTERACTIONS =================
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.InteractionCreate, async (interaction) => {
 
   // ---------- /find-collab ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
@@ -106,7 +99,6 @@ client.on(Events.InteractionCreate, async interaction => {
       .setCustomId("event-modal")
       .setTitle("Create Music Event");
 
-    // 5 champs max
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -125,14 +117,14 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("date")
-          .setLabel("Date (dd/mm/yyyy)")
+          .setLabel("Date (DD/MM/YYYY)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("time")
-          .setLabel("Time (24h, e.g., 20:00)")
+          .setLabel("Time (HH:MM 24h)")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
@@ -156,18 +148,17 @@ client.on(Events.InteractionCreate, async interaction => {
     const time = interaction.fields.getTextInputValue("time");
     const location = interaction.fields.getTextInputValue("location");
 
-    // Default color
+    // Couleur par défaut
     let color = 0xD10C0C;
 
-    // Initial embed
     const embed = new EmbedBuilder()
       .setTitle(name)
       .setDescription(description)
       .setColor(color)
       .addFields(
-        { name: "**📅 Date**", value: date, inline: true },
-        { name: "**⏰ Time**", value: time, inline: true },
-        { name: "**📍 Location**", value: location || "TBA", inline: true }
+        { name: "**Date**", value: date, inline: true },
+        { name: "**Time**", value: time, inline: true },
+        { name: "**Location**", value: location || "TBA", inline: true }
       )
       .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
@@ -178,37 +169,37 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
     const message = await thread.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Event created in ${thread.name}. Reply with your poster, ticket link, external link, or select a color.`, ephemeral: true });
 
-    await interaction.reply({ content: `✅ Event created! Please reply here with image, ticket link, external link, and color.`, ephemeral: true });
-
-    // Collect next message from the user for extra info
+    // ---------- Collector for poster, links, color ----------
     const filter = m => m.author.id === interaction.user.id;
-    const collector = thread.createMessageCollector({ filter, time: 600000, max: 1 }); // 10 min
+    const collector = thread.createMessageCollector({ filter, time: 10 * 60 * 1000, max: 1 });
 
     collector.on("collect", async m => {
       const lines = m.content.split("\n").map(l => l.trim()).filter(Boolean);
+      let image, ticket, external;
+      lines.forEach(l => {
+        if (l.match(/\.(png|jpg|jpeg|gif|webp)$/i)) image = l;
+        else if (!ticket) ticket = l;
+        else external = l;
+        if (l.startsWith("#")) color = parseInt(l.replace("#", ""),16);
+      });
 
-      // Parse image, ticket, external link, color
-      const image = lines.find(l => l.match(/\.(png|jpg|jpeg|gif|webp)$/i));
-      const ticket = lines.find(l => l.startsWith("http") && !image);
-      const external = lines.find(l => l.startsWith("http") && l !== ticket);
-      const colorLine = lines.find(l => l.startsWith("#"));
-      if (colorLine) color = parseInt(colorLine.replace("#",""),16);
+      const fields = [];
+      if (ticket) fields.push({ name: "🎟 Get tickets here", value: ticket, inline: true });
+      if (external) fields.push({ name: "🔗 For more info", value: external, inline: true });
+      if (fields.length) embed.addFields(fields);
+      if (image) embed.setImage(image);
+      embed.setColor(color);
 
-      const newEmbed = EmbedBuilder.from(embed)
-        .setColor(color);
-
-      if (image) newEmbed.setImage(image);
-
-      if (ticket || external) {
-        newEmbed.addFields(
-          ticket ? { name: "🎟 Get tickets here", value: ticket, inline: true } : {},
-          external ? { name: "🔗 For more info", value: external, inline: true } : {}
-        );
-      }
-
-      await message.edit({ embeds: [newEmbed] });
+      await message.edit({ embeds: [embed] });
       await m.reply({ content: "✅ Event updated with image, links, and color.", ephemeral: true });
+    });
+
+    collector.on("end", collected => {
+      if (collected.size === 0) {
+        thread.send("⚠️ No additional info provided. Event kept basic.");
+      }
     });
   }
 });
