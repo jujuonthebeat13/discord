@@ -3,10 +3,9 @@ const {
   GatewayIntentBits,
   SlashCommandBuilder,
   ActionRowBuilder,
-  StringSelectMenuBuilder,
-  ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
+  ModalBuilder,
   Events,
   EmbedBuilder
 } = require("discord.js");
@@ -24,18 +23,18 @@ const CREATIVE_ROLE_IDS = [
   "1458284994345570538", // Sound
   "1458140485393842207", // Design
   "1458140400559722558", // Game Dev
-  "1458285431165554910", // VFX
+  "1458285431165570538", // VFX
   "1458285481417638020", // Animation
   "1458285599101288559", // Video
   "1458285657423085764"  // Photo
 ];
 
 const COLOR_OPTIONS = [
-  { label: "Red", value: "D10C0C", color: 0xD10C0C },
-  { label: "Blue", value: "3498DB", color: 0x3498DB },
-  { label: "Green", value: "2ECC71", color: 0x2ECC71 },
-  { label: "Purple", value: "9B59B6", color: 0x9B59B6 },
-  { label: "Orange", value: "E67E22", color: 0xE67E22 }
+  { label: "Red", value: 0xD10C0C, color: 0xD10C0C },
+  { label: "Blue", value: 0x3498DB, color: 0x3498DB },
+  { label: "Green", value: 0x2ECC71, color: 0x2ECC71 },
+  { label: "Purple", value: 0x9B59B6, color: 0x9B59B6 },
+  { label: "Orange", value: 0xE67E22, color: 0xE67E22 }
 ];
 
 // ================= READY =================
@@ -66,40 +65,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .filter(Boolean)
       .map(role => ({ label: role.name, value: role.id }));
 
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("select-role")
-      .setPlaceholder("Select a creative role")
-      .addOptions(roles);
-
     await interaction.reply({
-      content: "Select a role to see available members:",
-      components: [new ActionRowBuilder().addComponents(menu)],
+      content: "Select a role to see members (menu coming soon).",
       ephemeral: true
     });
   }
 
-  // ---------- ROLE SELECT ----------
-  if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
-    await interaction.guild.members.fetch();
-    const role = interaction.guild.roles.cache.get(interaction.values[0]);
-    if (!role) return;
-
-    const members = role.members.map(m => `<@${m.user.id}>`);
-    const embed = new EmbedBuilder()
-      .setTitle(`${role.name} — Available members`)
-      .setDescription(members.length ? members.slice(0, 20).join("\n") : "_No members found_")
-      .setColor(0x1abc9c);
-
-    await interaction.update({ embeds: [embed], components: [] });
-  }
-
   // ---------- /create-event ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
-    const modal = new ModalBuilder()
-      .setCustomId("event-modal")
-      .setTitle("Create Music Event");
+    // Étape 1 : nom, description, date, heure, lieu
+    const modal1 = new ModalBuilder()
+      .setCustomId("event-step1")
+      .setTitle("Create Music Event — Step 1");
 
-    modal.addComponents(
+    modal1.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("name")
@@ -137,70 +116,104 @@ client.on(Events.InteractionCreate, async (interaction) => {
       )
     );
 
-    await interaction.showModal(modal);
+    await interaction.showModal(modal1);
   }
 
-  // ---------- MODAL SUBMIT ----------
-  if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
-    const name = interaction.fields.getTextInputValue("name");
-    const description = interaction.fields.getTextInputValue("description");
-    const date = interaction.fields.getTextInputValue("date");
-    const time = interaction.fields.getTextInputValue("time");
-    const location = interaction.fields.getTextInputValue("location");
+  // ---------- MODAL SUBMIT STEP 1 ----------
+  if (interaction.isModalSubmit() && interaction.customId === "event-step1") {
+    const step1Data = {
+      name: interaction.fields.getTextInputValue("name"),
+      description: interaction.fields.getTextInputValue("description"),
+      date: interaction.fields.getTextInputValue("date"),
+      time: interaction.fields.getTextInputValue("time"),
+      location: interaction.fields.getTextInputValue("location")
+    };
 
-    // Couleur par défaut
-    let color = 0xD10C0C;
+    // Étape 2 : image, ticket, lien externe, couleur
+    const modal2 = new ModalBuilder()
+      .setCustomId("event-step2")
+      .setTitle("Create Music Event — Step 2");
 
+    modal2.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("image")
+          .setLabel("Image URL (Poster)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("ticket")
+          .setLabel("Ticket link")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("external")
+          .setLabel("External link")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("color")
+          .setLabel("Color (Red, Blue, Green, Purple, Orange) or leave blank")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      )
+    );
+
+    client.step1Data = client.step1Data || {};
+    client.step1Data[interaction.user.id] = step1Data;
+
+    await interaction.showModal(modal2);
+  }
+
+  // ---------- MODAL SUBMIT STEP 2 ----------
+  if (interaction.isModalSubmit() && interaction.customId === "event-step2") {
+    const step2Data = {
+      image: interaction.fields.getTextInputValue("image"),
+      ticket: interaction.fields.getTextInputValue("ticket"),
+      external: interaction.fields.getTextInputValue("external"),
+      colorName: interaction.fields.getTextInputValue("color")
+    };
+
+    const step1Data = client.step1Data[interaction.user.id];
+    if (!step1Data) return interaction.reply({ content: "❌ Step 1 data missing!", ephemeral: true });
+
+    // Déterminer couleur
+    let color = 0xD10C0C; // default red
+    if (step2Data.colorName) {
+      const c = COLOR_OPTIONS.find(c => c.label.toLowerCase() === step2Data.colorName.toLowerCase());
+      if (c) color = c.color;
+    }
+
+    // Créer embed
     const embed = new EmbedBuilder()
-      .setTitle(name)
-      .setDescription(description)
+      .setTitle(step1Data.name)
+      .setDescription(step1Data.description)
       .setColor(color)
       .addFields(
-        { name: "**Date**", value: date, inline: true },
-        { name: "**Time**", value: time, inline: true },
-        { name: "**Location**", value: location || "TBA", inline: true }
+        { name: "**Date**", value: step1Data.date, inline: true },
+        { name: "**Time**", value: step1Data.time, inline: true },
+        { name: "**Location**", value: step1Data.location || "TBA", inline: true }
       )
       .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
 
+    if (step2Data.image) embed.setImage(step2Data.image);
+    if (step2Data.ticket) embed.addFields({ name: "🎟 Get tickets here", value: step2Data.ticket, inline: true });
+    if (step2Data.external) embed.addFields({ name: "🔗 For more info", value: step2Data.external, inline: true });
+
     // Post in existing thread
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
-    if (!thread || !thread.isThread()) {
-      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
-    }
+    if (!thread || !thread.isThread()) return interaction.reply({ content: "❌ Thread not found", ephemeral: true });
 
-    const message = await thread.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Event created in ${thread.name}. Reply with your poster, ticket link, external link, or select a color.`, ephemeral: true });
+    await thread.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Event created in ${thread.name}!`, ephemeral: true });
 
-    // ---------- Collector for poster, links, color ----------
-    const filter = m => m.author.id === interaction.user.id;
-    const collector = thread.createMessageCollector({ filter, time: 10 * 60 * 1000, max: 1 });
-
-    collector.on("collect", async m => {
-      const lines = m.content.split("\n").map(l => l.trim()).filter(Boolean);
-      let image, ticket, external;
-      lines.forEach(l => {
-        if (l.match(/\.(png|jpg|jpeg|gif|webp)$/i)) image = l;
-        else if (!ticket) ticket = l;
-        else external = l;
-        if (l.startsWith("#")) color = parseInt(l.replace("#", ""),16);
-      });
-
-      const fields = [];
-      if (ticket) fields.push({ name: "🎟 Get tickets here", value: ticket, inline: true });
-      if (external) fields.push({ name: "🔗 For more info", value: external, inline: true });
-      if (fields.length) embed.addFields(fields);
-      if (image) embed.setImage(image);
-      embed.setColor(color);
-
-      await message.edit({ embeds: [embed] });
-      await m.reply({ content: "✅ Event updated with image, links, and color.", ephemeral: true });
-    });
-
-    collector.on("end", collected => {
-      if (collected.size === 0) {
-        thread.send("⚠️ No additional info provided. Event kept basic.");
-      }
-    });
+    delete client.step1Data[interaction.user.id]; // cleanup
   }
 });
 
