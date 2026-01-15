@@ -1,32 +1,49 @@
-const {
-  Client,
-  GatewayIntentBits,
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  Events,
-  EmbedBuilder
+const { 
+  Client, 
+  GatewayIntentBits, 
+  SlashCommandBuilder, 
+  ActionRowBuilder, 
+  StringSelectMenuBuilder, 
+  ModalBuilder, 
+  TextInputBuilder, 
+  TextInputStyle, 
+  SelectMenuBuilder,
+  Events, 
+  EmbedBuilder 
 } = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMembers
   ]
 });
 
 // ================= CONFIG =================
+const GUILD_ID = "1458135503974170788"; // Your server ID
+const MUSIC_THREAD_ID = "1461146580148158589"; // The ID of the existing thread in the forum
 
-const GUILD_ID = "1458135503974170788";
-const EVENT_THREAD_ID = "PUT_EXISTING_THREAD_ID_HERE";
+const CREATIVE_ROLE_IDS = [
+  "1458140072221343846", // Musician
+  "1458284994345570538", // Sound
+  "1458140485393842207", // Design
+  "1458140400559722558", // Game Dev
+  "1458285431165554910", // VFX
+  "1458285481417638020", // Animation
+  "1458285599101288559", // Video
+  "1458285657423085764"  // Photo
+];
+
+const COLOR_OPTIONS = [
+  { label: "Teal", value: "1abc9c", color: 0x1abc9c },
+  { label: "Blue", value: "3498db", color: 0x3498db },
+  { label: "Purple", value: "9b59b6", color: 0x9b59b6 },
+  { label: "Red", value: "e74c3c", color: 0xe74c3c },
+  { label: "Orange", value: "e67e22", color: 0xe67e22 },
+  { label: "Yellow", value: "f1c40f", color: 0xf1c40f }
+];
 
 // ================= READY =================
-
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
@@ -34,24 +51,55 @@ client.once("ready", async () => {
 
   await guild.commands.set([
     new SlashCommandBuilder()
+      .setName("find-collab")
+      .setDescription("Find members by creative role"),
+    new SlashCommandBuilder()
       .setName("create-event")
       .setDescription("Create a music event post")
   ]);
 
-  console.log("✅ Slash command registered");
+  console.log("✅ Slash commands registered");
 });
 
-// ================= TEMP STORAGE =================
-
-const eventCache = new Map();
-
 // ================= INTERACTIONS =================
-
 client.on(Events.InteractionCreate, async interaction => {
 
-  // ---------- SLASH ----------
-  if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
+  // ---------- /find-collab ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
+    const roles = CREATIVE_ROLE_IDS
+      .map(id => interaction.guild.roles.cache.get(id))
+      .filter(Boolean)
+      .map(role => ({ label: role.name, value: role.id }));
 
+    const menu = new StringSelectMenuBuilder()
+      .setCustomId("select-role")
+      .setPlaceholder("Select a creative role")
+      .addOptions(roles);
+
+    await interaction.reply({
+      content: "Select a role to see available members:",
+      components: [new ActionRowBuilder().addComponents(menu)],
+      ephemeral: true
+    });
+  }
+
+  // ---------- ROLE SELECT ----------
+  if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
+    await interaction.guild.members.fetch();
+    const role = interaction.guild.roles.cache.get(interaction.values[0]);
+    if (!role) return;
+
+    const members = role.members.map(m => `<@${m.user.id}>`);
+    const embed = new EmbedBuilder()
+      .setTitle(`${role.name} — Available members`)
+      .setDescription(members.length ? members.slice(0, 20).join("\n") : "_No members found_")
+      .setColor(0x1abc9c);
+
+    await interaction.update({ embeds: [embed], components: [] });
+  }
+
+  // ---------- /create-event ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
     const modal = new ModalBuilder()
       .setCustomId("event-modal")
       .setTitle("Create Music Event");
@@ -73,11 +121,34 @@ client.on(Events.InteractionCreate, async interaction => {
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("datetime")
-          .setLabel("Date & time")
-          .setPlaceholder("2026-03-22 • 20:00")
+          .setCustomId("date")
+          .setLabel("Date")
           .setStyle(TextInputStyle.Short)
+          .setPlaceholder("March 22")
           .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("time")
+          .setLabel("Time")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("8:00 PM")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("location")
+          .setLabel("Location")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("image")
+          .setLabel("Image URL (Poster)")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("https://yourimage.png")
+          .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
@@ -88,101 +159,69 @@ client.on(Events.InteractionCreate, async interaction => {
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("links")
+          .setCustomId("additional")
           .setLabel("Additional links")
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(false)
       )
     );
 
+    // Color selection as a select menu
+    const colorMenu = new StringSelectMenuBuilder()
+      .setCustomId("color-select")
+      .setPlaceholder("Choose embed color")
+      .addOptions(COLOR_OPTIONS.map(c => ({ label: c.label, value: c.value })));
+
+    modal.addComponents(new ActionRowBuilder().addComponents(colorMenu));
+
     await interaction.showModal(modal);
   }
 
-  // ---------- MODAL ----------
+  // ---------- MODAL SUBMIT ----------
   if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
+    const name = interaction.fields.getTextInputValue("name");
+    const description = interaction.fields.getTextInputValue("description");
+    const date = interaction.fields.getTextInputValue("date");
+    const time = interaction.fields.getTextInputValue("time");
+    const location = interaction.fields.getTextInputValue("location");
+    const image = interaction.fields.getTextInputValue("image");
+    const ticket = interaction.fields.getTextInputValue("ticket");
+    const additional = interaction.fields.getTextInputValue("additional");
 
-    eventCache.set(interaction.user.id, {
-      name: interaction.fields.getTextInputValue("name"),
-      description: interaction.fields.getTextInputValue("description"),
-      datetime: interaction.fields.getTextInputValue("datetime"),
-      ticket: interaction.fields.getTextInputValue("ticket"),
-      links: interaction.fields.getTextInputValue("links")
-    });
+    // Default color
+    let color = 0x1abc9c;
 
-    const colorMenu = new StringSelectMenuBuilder()
-      .setCustomId("color-select")
-      .setPlaceholder("Select embed color")
-      .addOptions([
-        { label: "Teal", value: "1abc9c" },
-        { label: "Purple", value: "9b59b6" },
-        { label: "Red", value: "e74c3c" },
-        { label: "Blue", value: "3498db" },
-        { label: "Orange", value: "e67e22" }
-      ]);
+    // Check if user selected color (menu)
+    const colorValue = interaction.fields.getTextInputValue("color-select");
+    if (colorValue) color = parseInt(colorValue, 16);
 
-    await interaction.reply({
-      content: "🎨 Choose a color for your event embed:",
-      components: [new ActionRowBuilder().addComponents(colorMenu)],
-      ephemeral: true
-    });
+    const embed = new EmbedBuilder()
+      .setTitle(name)
+      .setDescription(description)
+      .setColor(color)
+      .addFields(
+        { name: "📅 Date", value: date, inline: true },
+        { name: "⏰ Time", value: time, inline: true },
+        { name: "📍 Location", value: location || "TBA", inline: true },
+        { name: "🎟 Ticket", value: ticket || "—", inline: true },
+        { name: "🔗 Additional links", value: additional || "—", inline: false }
+      )
+      .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
+
+    if (image) embed.setImage(image);
+
+    // Post in existing forum thread
+    const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
+    if (!thread || !thread.isThread()) {
+      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
+    }
+
+    await thread.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
-
-  // ---------- COLOR ----------
-  if (interaction.isStringSelectMenu() && interaction.customId === "color-select") {
-
-    const data = eventCache.get(interaction.user.id);
-    if (!data) return;
-
-    data.color = parseInt(interaction.values[0], 16);
-    eventCache.set(interaction.user.id, data);
-
-    await interaction.update({
-      content: "🖼️ Send the event poster image now (or ignore to skip)",
-      components: []
-    });
-  }
-});
-
-// ================= IMAGE LISTENER =================
-
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot) return;
-
-  const data = eventCache.get(message.author.id);
-  if (!data) return;
-
-  const image = message.attachments.find(a =>
-    a.contentType?.startsWith("image/")
-  );
-
-  const embed = new EmbedBuilder()
-    .setTitle(data.name)
-    .setDescription(data.description)
-    .setColor(data.color || 0x1abc9c)
-    .addFields(
-      { name: "📅 Date & Time", value: data.datetime, inline: true },
-      { name: "🎟 Tickets", value: data.ticket || "—", inline: true },
-      {
-        name: "🔗 Links",
-        value: data.links || "—"
-      }
-    )
-    .setFooter({
-      text: `Post made by ${message.author.tag}`,
-      iconURL: message.author.displayAvatarURL()
-    });
-
-  if (image) embed.setImage(image.url);
-
-  const thread = await message.guild.channels.fetch(EVENT_THREAD_ID);
-  if (!thread || !thread.isThread()) return;
-
-  await thread.send({ embeds: [embed] });
-
-  eventCache.delete(message.author.id);
-  await message.reply("✅ Event posted successfully!");
 });
 
 // ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
+
 
