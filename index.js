@@ -7,7 +7,6 @@ const {
   ModalBuilder, 
   TextInputBuilder, 
   TextInputStyle, 
-  SelectMenuBuilder,
   Events, 
   EmbedBuilder 
 } = require("discord.js");
@@ -21,7 +20,7 @@ const client = new Client({
 
 // ================= CONFIG =================
 const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // The ID of the existing thread in the forum
+const MUSIC_THREAD_ID = "1461146580148158589"; // ID of the existing thread
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -32,15 +31,6 @@ const CREATIVE_ROLE_IDS = [
   "1458285481417638020", // Animation
   "1458285599101288559", // Video
   "1458285657423085764"  // Photo
-];
-
-const COLOR_OPTIONS = [
-  { label: "Teal", value: "1abc9c", color: 0x1abc9c },
-  { label: "Blue", value: "3498db", color: 0x3498db },
-  { label: "Purple", value: "9b59b6", color: 0x9b59b6 },
-  { label: "Red", value: "e74c3c", color: 0xe74c3c },
-  { label: "Orange", value: "e67e22", color: 0xe67e22 },
-  { label: "Yellow", value: "f1c40f", color: 0xf1c40f }
 ];
 
 // ================= READY =================
@@ -71,6 +61,10 @@ client.on(Events.InteractionCreate, async interaction => {
       .filter(Boolean)
       .map(role => ({ label: role.name, value: role.id }));
 
+    if (!roles.length) {
+      return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
+    }
+
     const menu = new StringSelectMenuBuilder()
       .setCustomId("select-role")
       .setPlaceholder("Select a creative role")
@@ -87,7 +81,7 @@ client.on(Events.InteractionCreate, async interaction => {
   if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
     await interaction.guild.members.fetch();
     const role = interaction.guild.roles.cache.get(interaction.values[0]);
-    if (!role) return;
+    if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
 
     const members = role.members.map(m => `<@${m.user.id}>`);
     const embed = new EmbedBuilder()
@@ -98,123 +92,127 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.update({ embeds: [embed], components: [] });
   }
 
-// ---------- /create-event ----------
-if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
-  const modal = new ModalBuilder()
-    .setCustomId("event-modal")
-    .setTitle("Create Music Event");
+  // ---------- /create-event ----------
+  if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
+    const modal = new ModalBuilder()
+      .setCustomId("event-modal")
+      .setTitle("Create Music Event");
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("name")
-        .setLabel("Event name")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("description")
-        .setLabel("Description")
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("date")
-        .setLabel("Date")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("time")
-        .setLabel("Time")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("location")
-        .setLabel("Location")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("color")
-        .setLabel("Embed color hex (optional, e.g., #1abc9c)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("image")
-        .setLabel("Image URL (Poster)")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("ticket")
-        .setLabel("Ticket link")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false)
-    ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder()
-        .setCustomId("additional")
-        .setLabel("Additional links")
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(false)
-    )
-  );
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("name")
+          .setLabel("Event Name")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("description")
+          .setLabel("Description")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("date")
+          .setLabel("Date")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("March 22")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("time")
+          .setLabel("Time")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("8:00 PM")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("location")
+          .setLabel("Location")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("color")
+          .setLabel("Embed Color Hex (optional, e.g., #1abc9c)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("image")
+          .setLabel("Image URL (Poster)")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("ticket")
+          .setLabel("Ticket Link")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("additional")
+          .setLabel("Additional Links")
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(false)
+      )
+    );
 
-  await interaction.showModal(modal);
-}
-
-// ---------- MODAL SUBMIT ----------
-if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
-  const name = interaction.fields.getTextInputValue("name");
-  const description = interaction.fields.getTextInputValue("description");
-  const date = interaction.fields.getTextInputValue("date");
-  const time = interaction.fields.getTextInputValue("time");
-  const location = interaction.fields.getTextInputValue("location");
-  const image = interaction.fields.getTextInputValue("image");
-  const ticket = interaction.fields.getTextInputValue("ticket");
-  const additional = interaction.fields.getTextInputValue("additional");
-  const colorHex = interaction.fields.getTextInputValue("color");
-
-  const color = colorHex ? parseInt(colorHex.replace("#",""), 16) : 0x1abc9c;
-
-  const embed = new EmbedBuilder()
-    .setTitle(name)
-    .setDescription(description)
-    .setColor(color)
-    .addFields(
-      { name: "📅 Date", value: date, inline: true },
-      { name: "⏰ Time", value: time, inline: true },
-      { name: "📍 Location", value: location || "TBA", inline: true },
-      { name: "🎟 Ticket", value: ticket || "—", inline: true },
-      { name: "🔗 Additional links", value: additional || "—" }
-    )
-    .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
-
-  if (image) embed.setImage(image);
-
-  // Post in existing thread
-  const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
-  if (!thread || !thread.isThread()) {
-    return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
+    await interaction.showModal(modal);
   }
 
-  await thread.send({ embeds: [embed] });
-  await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
-}
+  // ---------- MODAL SUBMIT ----------
+  if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
+    const name = interaction.fields.getTextInputValue("name");
+    const description = interaction.fields.getTextInputValue("description");
+    const date = interaction.fields.getTextInputValue("date");
+    const time = interaction.fields.getTextInputValue("time");
+    const location = interaction.fields.getTextInputValue("location");
+    const image = interaction.fields.getTextInputValue("image");
+    const ticket = interaction.fields.getTextInputValue("ticket");
+    const additional = interaction.fields.getTextInputValue("additional");
+    const colorHex = interaction.fields.getTextInputValue("color");
+
+    const color = colorHex ? parseInt(colorHex.replace("#",""), 16) : 0x1abc9c;
+
+    const embed = new EmbedBuilder()
+      .setTitle(name)
+      .setDescription(description)
+      .setColor(color)
+      .addFields(
+        { name: "📅 Date", value: date, inline: true },
+        { name: "⏰ Time", value: time, inline: true },
+        { name: "📍 Location", value: location || "TBA", inline: true },
+        { name: "🎟 Ticket", value: ticket || "—", inline: true },
+        { name: "🔗 Additional Links", value: additional || "—", inline: false }
+      )
+      .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
+
+    if (image) embed.setImage(image);
+
+    // Post in existing thread
+    const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
+    if (!thread || !thread.isThread()) {
+      return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
+    }
+
+    await thread.send({ embeds: [embed] });
+    await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
+  }
+
 });
 
 // ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
+
 
 
 
