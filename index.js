@@ -6,7 +6,8 @@ const {
   StringSelectMenuBuilder, 
   ModalBuilder, 
   TextInputBuilder, 
-  TextInputStyle,
+  TextInputStyle, 
+  SelectMenuBuilder,
   Events, 
   EmbedBuilder 
 } = require("discord.js");
@@ -14,13 +15,15 @@ const {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ]
 });
 
 // ================= CONFIG =================
 const GUILD_ID = "1458135503974170788"; // Your server ID
-const MUSIC_THREAD_ID = "1461146580148158589"; // The ID of the existing thread in the forum
+const MUSIC_THREAD_ID = "1461146580148158589"; // Existing thread ID in forum
 
 const CREATIVE_ROLE_IDS = [
   "1458140072221343846", // Musician
@@ -31,6 +34,15 @@ const CREATIVE_ROLE_IDS = [
   "1458285481417638020", // Animation
   "1458285599101288559", // Video
   "1458285657423085764"  // Photo
+];
+
+const COLOR_OPTIONS = [
+  { label: "Red", value: "D10C0C" },
+  { label: "Teal", value: "1ABC9C" },
+  { label: "Blue", value: "3498DB" },
+  { label: "Purple", value: "9B59B6" },
+  { label: "Orange", value: "E67E22" },
+  { label: "Yellow", value: "F1C40F" }
 ];
 
 // ================= READY =================
@@ -94,18 +106,19 @@ client.on(Events.InteractionCreate, async interaction => {
       .setCustomId("event-modal")
       .setTitle("Create Music Event");
 
+    // 5 champs max
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("name")
-          .setLabel("Event name")
+          .setLabel("Event Name")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("description")
-          .setLabel("Event description")
+          .setLabel("Description")
           .setStyle(TextInputStyle.Paragraph)
           .setRequired(true)
       ),
@@ -129,34 +142,6 @@ client.on(Events.InteractionCreate, async interaction => {
           .setLabel("Location")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("ticket")
-          .setLabel("Ticket link")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("additional")
-          .setLabel("External links / more info")
-          .setStyle(TextInputStyle.Paragraph)
-          .setRequired(false)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("image")
-          .setLabel("Poster image URL (direct link)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId("color")
-          .setLabel("Embed color (hex, optional, e.g., #D10C0C)")
-          .setStyle(TextInputStyle.Short)
-          .setRequired(false)
       )
     );
 
@@ -170,14 +155,11 @@ client.on(Events.InteractionCreate, async interaction => {
     const date = interaction.fields.getTextInputValue("date");
     const time = interaction.fields.getTextInputValue("time");
     const location = interaction.fields.getTextInputValue("location");
-    const ticket = interaction.fields.getTextInputValue("ticket");
-    const additional = interaction.fields.getTextInputValue("additional");
-    const image = interaction.fields.getTextInputValue("image");
-    const colorInput = interaction.fields.getTextInputValue("color");
 
-    const color = colorInput ? parseInt(colorInput.replace("#",""),16) : 0xD10C0C;
+    // Default color
+    let color = 0xD10C0C;
 
-    // Build embed
+    // Initial embed
     const embed = new EmbedBuilder()
       .setTitle(name)
       .setDescription(description)
@@ -185,13 +167,9 @@ client.on(Events.InteractionCreate, async interaction => {
       .addFields(
         { name: "**📅 Date**", value: date, inline: true },
         { name: "**⏰ Time**", value: time, inline: true },
-        { name: "**📍 Location**", value: location || "TBA", inline: true },
-        { name: "**🎟 Ticket**", value: ticket ? `[Get tickets here](${ticket})` : "—", inline: true },
-        { name: "**🔗 External links**", value: additional ? `[For more information](${additional})` : "—", inline: false }
+        { name: "**📍 Location**", value: location || "TBA", inline: true }
       )
       .setFooter({ text: `Post made by ${interaction.user.tag}`, iconURL: interaction.user.displayAvatarURL() });
-
-    if (image) embed.setImage(image);
 
     // Post in existing thread
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
@@ -199,10 +177,40 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
     }
 
-    await thread.send({ embeds: [embed] });
-    await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
-  }
+    const message = await thread.send({ embeds: [embed] });
 
+    await interaction.reply({ content: `✅ Event created! Please reply here with image, ticket link, external link, and color.`, ephemeral: true });
+
+    // Collect next message from the user for extra info
+    const filter = m => m.author.id === interaction.user.id;
+    const collector = thread.createMessageCollector({ filter, time: 600000, max: 1 }); // 10 min
+
+    collector.on("collect", async m => {
+      const lines = m.content.split("\n").map(l => l.trim()).filter(Boolean);
+
+      // Parse image, ticket, external link, color
+      const image = lines.find(l => l.match(/\.(png|jpg|jpeg|gif|webp)$/i));
+      const ticket = lines.find(l => l.startsWith("http") && !image);
+      const external = lines.find(l => l.startsWith("http") && l !== ticket);
+      const colorLine = lines.find(l => l.startsWith("#"));
+      if (colorLine) color = parseInt(colorLine.replace("#",""),16);
+
+      const newEmbed = EmbedBuilder.from(embed)
+        .setColor(color);
+
+      if (image) newEmbed.setImage(image);
+
+      if (ticket || external) {
+        newEmbed.addFields(
+          ticket ? { name: "🎟 Get tickets here", value: ticket, inline: true } : {},
+          external ? { name: "🔗 For more info", value: external, inline: true } : {}
+        );
+      }
+
+      await message.edit({ embeds: [newEmbed] });
+      await m.reply({ content: "✅ Event updated with image, links, and color.", ephemeral: true });
+    });
+  }
 });
 
 // ================= LOGIN =================
