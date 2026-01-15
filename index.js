@@ -3,7 +3,6 @@ const {
   GatewayIntentBits, 
   SlashCommandBuilder, 
   ActionRowBuilder, 
-  StringSelectMenuBuilder, 
   ModalBuilder, 
   TextInputBuilder, 
   TextInputStyle, 
@@ -22,17 +21,6 @@ const client = new Client({
 const GUILD_ID = "1458135503974170788"; // <-- Your server ID
 const MUSIC_THREAD_ID = "1461146580148158589"; // <-- ID of the existing thread in the forum
 
-const CREATIVE_ROLE_IDS = [
-  "1458140072221343846", // Musician
-  "1458284994345570538", // Sound
-  "1458140485393842207", // Design
-  "1458140400559722558", // Game Dev
-  "1458285431165554910", // VFX
-  "1458285481417638020", // Animation
-  "1458285599101288559", // Video
-  "1458285657423085764"  // Photo
-];
-
 // ================= READY =================
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
@@ -40,9 +28,6 @@ client.once("ready", async () => {
   try {
     const guild = await client.guilds.fetch(GUILD_ID);
     await guild.commands.set([
-      new SlashCommandBuilder()
-        .setName("find-collab")
-        .setDescription("Find members by creative role"),
       new SlashCommandBuilder()
         .setName("create-event")
         .setDescription("Create a music event post")
@@ -55,42 +40,6 @@ client.once("ready", async () => {
 
 // ================= INTERACTIONS =================
 client.on(Events.InteractionCreate, async interaction => {
-
-  // ---------- /find-collab ----------
-  if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
-    const roles = CREATIVE_ROLE_IDS
-      .map(id => interaction.guild.roles.cache.get(id))
-      .filter(Boolean)
-      .map(role => ({ label: role.name, value: role.id }));
-
-    if (!roles.length) return interaction.reply({ content: "❌ No roles found!", ephemeral: true });
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("select-role")
-      .setPlaceholder("Select a creative role")
-      .addOptions(roles);
-
-    await interaction.reply({
-      content: "Select a role to see available members:",
-      components: [new ActionRowBuilder().addComponents(menu)],
-      ephemeral: true
-    });
-  }
-
-  // ---------- ROLE SELECT ----------
-  if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
-    await interaction.guild.members.fetch();
-    const role = interaction.guild.roles.cache.get(interaction.values[0]);
-    if (!role) return interaction.update({ content: "❌ Role not found", components: [] });
-
-    const members = role.members.map(m => `<@${m.user.id}>`);
-    const embed = new EmbedBuilder()
-      .setTitle(`${role.name} — Available members`)
-      .setDescription(members.length ? members.slice(0, 20).join("\n") : "_No members found_")
-      .setColor(0x1abc9c);
-
-    await interaction.update({ embeds: [embed], components: [] });
-  }
 
   // ---------- /create-event ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
@@ -144,7 +93,7 @@ client.on(Events.InteractionCreate, async interaction => {
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("image")
-          .setLabel("Image URL (Poster)")
+          .setLabel("Poster URL (image)")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
@@ -196,15 +145,16 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (image) embed.setImage(image);
 
-    // Post in existing thread (unarchive if needed)
+    // Post in existing thread
     const thread = await interaction.guild.channels.fetch(MUSIC_THREAD_ID);
     if (!thread) return interaction.reply({ content: "❌ Music thread not found", ephemeral: true });
 
     if (thread.archived) await thread.setArchived(false);
-    await thread.send({ embeds: [embed] });
 
+    await thread.send({ embeds: [embed] });
     await interaction.reply({ content: `✅ Event posted in ${thread.name}`, ephemeral: true });
   }
+
 });
 
 // ================= LOGIN =================
