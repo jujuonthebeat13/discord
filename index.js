@@ -8,32 +8,22 @@ const {
   TextInputBuilder,
   TextInputStyle,
   Events,
-  EmbedBuilder,
-  ChannelType
+  EmbedBuilder
 } = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ]
 });
 
 // ================= CONFIG =================
 
-const GUILD_ID = "1458135503974170788"; // TON SERVEUR
-const MUSIC_FORUM_ID = "1461146580148158589"; // FORUM MUSOC EVENT
-
-const CREATIVE_ROLE_IDS = [
-  "1458140072221343846", // Musician
-  "1458284994345570538", // Sound
-  "1458140485393842207", // Design
-  "1458140400559722558", // Game Dev
-  "1458285431165554910", // VFX
-  "1458285481417638020", // Animation
-  "1458285599101288559", // Video
-  "1458285657423085764"  // Photo
-];
+const GUILD_ID = "1458135503974170788";
+const EVENT_THREAD_ID = "PUT_EXISTING_THREAD_ID_HERE";
 
 // ================= READY =================
 
@@ -44,66 +34,22 @@ client.once("ready", async () => {
 
   await guild.commands.set([
     new SlashCommandBuilder()
-      .setName("find-collab")
-      .setDescription("Find members by creative role")
-      .toJSON(),
-
-    new SlashCommandBuilder()
       .setName("create-event")
       .setDescription("Create a music event post")
-      .toJSON()
   ]);
 
-  console.log("✅ Slash commands registered");
+  console.log("✅ Slash command registered");
 });
+
+// ================= TEMP STORAGE =================
+
+const eventCache = new Map();
 
 // ================= INTERACTIONS =================
 
 client.on(Events.InteractionCreate, async interaction => {
 
-  if (!interaction.guild) return;
-
-  // ---------- /find-collab ----------
-  if (interaction.isChatInputCommand() && interaction.commandName === "find-collab") {
-    const roles = CREATIVE_ROLE_IDS
-      .map(id => interaction.guild.roles.cache.get(id))
-      .filter(Boolean)
-      .map(role => ({ label: role.name, value: role.id }));
-
-    const menu = new StringSelectMenuBuilder()
-      .setCustomId("select-role")
-      .setPlaceholder("Select a creative role")
-      .addOptions(roles);
-
-    await interaction.reply({
-      content: "Select a role to see available members:",
-      components: [new ActionRowBuilder().addComponents(menu)],
-      ephemeral: true
-    });
-  }
-
-  // ---------- ROLE SELECT ----------
-  if (interaction.isStringSelectMenu() && interaction.customId === "select-role") {
-    await interaction.guild.members.fetch();
-
-    const role = interaction.guild.roles.cache.get(interaction.values[0]);
-    if (!role) {
-      return interaction.update({ content: "❌ Role not found", components: [] });
-    }
-
-    const members = role.members.map(m => `<@${m.user.id}>`);
-
-    const embed = new EmbedBuilder()
-      .setTitle(`${role.name} — Available members`)
-      .setDescription(
-        members.length ? members.slice(0, 20).join("\n") : "_No members found_"
-      )
-      .setColor(0x1abc9c);
-
-    await interaction.update({ embeds: [embed], components: [] });
-  }
-
-  // ---------- /create-event ----------
+  // ---------- SLASH ----------
   if (interaction.isChatInputCommand() && interaction.commandName === "create-event") {
 
     const modal = new ModalBuilder()
@@ -127,27 +73,24 @@ client.on(Events.InteractionCreate, async interaction => {
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("date")
+          .setCustomId("datetime")
           .setLabel("Date & time")
+          .setPlaceholder("2026-03-22 • 20:00")
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder("March 22 • 8PM")
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("location")
-          .setLabel("Location")
+          .setCustomId("ticket")
+          .setLabel("Ticket link")
           .setStyle(TextInputStyle.Short)
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId("links")
-          .setLabel("Links / Poster / Color")
+          .setLabel("Additional links")
           .setStyle(TextInputStyle.Paragraph)
-          .setPlaceholder(
-            "https://poster.png\nhttps://instagram.com/...\n#ff0055"
-          )
           .setRequired(false)
       )
     );
@@ -155,65 +98,91 @@ client.on(Events.InteractionCreate, async interaction => {
     await interaction.showModal(modal);
   }
 
-  // ---------- MODAL SUBMIT ----------
+  // ---------- MODAL ----------
   if (interaction.isModalSubmit() && interaction.customId === "event-modal") {
 
-    const name = interaction.fields.getTextInputValue("name");
-    const description = interaction.fields.getTextInputValue("description");
-    const date = interaction.fields.getTextInputValue("date");
-    const location = interaction.fields.getTextInputValue("location") || "TBA";
-    const rawLinks = interaction.fields.getTextInputValue("links") || "";
-
-    const lines = rawLinks.split("\n").map(l => l.trim()).filter(Boolean);
-
-    const colorLine = lines.find(l => l.startsWith("#"));
-    const color = colorLine ? parseInt(colorLine.slice(1), 16) : 0x1abc9c;
-
-    const imageLink = lines.find(l =>
-      l.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-    );
-
-    const links = lines.filter(l => l.startsWith("http") && l !== imageLink);
-
-    const embed = new EmbedBuilder()
-      .setTitle(name)
-      .setDescription(description)
-      .setColor(color)
-      .addFields(
-        { name: "📅 Date & Time", value: date, inline: true },
-        { name: "📍 Location", value: location, inline: true },
-        {
-          name: "🔗 Links",
-          value: links.length ? links.join("\n") : "—"
-        }
-      )
-      .setFooter({
-        text: `Post made by ${interaction.user.tag}`,
-        iconURL: interaction.user.displayAvatarURL()
-      });
-
-    if (imageLink) embed.setImage(imageLink);
-
-    const forum = await interaction.guild.channels.fetch(MUSIC_FORUM_ID);
-
-    if (!forum || forum.type !== ChannelType.GuildForum) {
-      return interaction.reply({
-        content: "❌ Music forum not found.",
-        ephemeral: true
-      });
-    }
-
-    await forum.threads.create({
-      name: name,
-      message: { embeds: [embed] }
+    eventCache.set(interaction.user.id, {
+      name: interaction.fields.getTextInputValue("name"),
+      description: interaction.fields.getTextInputValue("description"),
+      datetime: interaction.fields.getTextInputValue("datetime"),
+      ticket: interaction.fields.getTextInputValue("ticket"),
+      links: interaction.fields.getTextInputValue("links")
     });
 
+    const colorMenu = new StringSelectMenuBuilder()
+      .setCustomId("color-select")
+      .setPlaceholder("Select embed color")
+      .addOptions([
+        { label: "Teal", value: "1abc9c" },
+        { label: "Purple", value: "9b59b6" },
+        { label: "Red", value: "e74c3c" },
+        { label: "Blue", value: "3498db" },
+        { label: "Orange", value: "e67e22" }
+      ]);
+
     await interaction.reply({
-      content: "✅ Event successfully posted!",
+      content: "🎨 Choose a color for your event embed:",
+      components: [new ActionRowBuilder().addComponents(colorMenu)],
       ephemeral: true
+    });
+  }
+
+  // ---------- COLOR ----------
+  if (interaction.isStringSelectMenu() && interaction.customId === "color-select") {
+
+    const data = eventCache.get(interaction.user.id);
+    if (!data) return;
+
+    data.color = parseInt(interaction.values[0], 16);
+    eventCache.set(interaction.user.id, data);
+
+    await interaction.update({
+      content: "🖼️ Send the event poster image now (or ignore to skip)",
+      components: []
     });
   }
 });
 
+// ================= IMAGE LISTENER =================
+
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return;
+
+  const data = eventCache.get(message.author.id);
+  if (!data) return;
+
+  const image = message.attachments.find(a =>
+    a.contentType?.startsWith("image/")
+  );
+
+  const embed = new EmbedBuilder()
+    .setTitle(data.name)
+    .setDescription(data.description)
+    .setColor(data.color || 0x1abc9c)
+    .addFields(
+      { name: "📅 Date & Time", value: data.datetime, inline: true },
+      { name: "🎟 Tickets", value: data.ticket || "—", inline: true },
+      {
+        name: "🔗 Links",
+        value: data.links || "—"
+      }
+    )
+    .setFooter({
+      text: `Post made by ${message.author.tag}`,
+      iconURL: message.author.displayAvatarURL()
+    });
+
+  if (image) embed.setImage(image.url);
+
+  const thread = await message.guild.channels.fetch(EVENT_THREAD_ID);
+  if (!thread || !thread.isThread()) return;
+
+  await thread.send({ embeds: [embed] });
+
+  eventCache.delete(message.author.id);
+  await message.reply("✅ Event posted successfully!");
+});
+
 // ================= LOGIN =================
 client.login(process.env.DISCORD_TOKEN);
+
